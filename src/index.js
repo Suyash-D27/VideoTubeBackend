@@ -12,7 +12,7 @@ connectDB()
         console.log("ERR:",error)
         throw error
     })
-    const port = process.env.PORT||8000
+    const port = process.env.PORT||5000
      app.listen(port,()=>{
         console.log(`connected to port ${port}`)
      })
@@ -20,6 +20,8 @@ connectDB()
 .catch((err)=>{
     console.log("MONGODB connecction failed",err)
 })
+
+
 
 
 

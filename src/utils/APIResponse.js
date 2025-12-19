@@ -1,4 +1,4 @@
-class APIrespos {
+class APIResponse {
     constructor(statusCode,data,message='Success'){
         this.statusCode=statusCode;
         this.data=data;
@@ -6,3 +6,5 @@ class APIrespos {
         this.success=statusCode<400;
     }
 }
+
+export{APIResponse}
