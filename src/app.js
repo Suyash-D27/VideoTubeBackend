@@ -1,33 +1,22 @@
-import express from "express"
-import cors from "cors"
+import express from "express";
 import cookieParser from "cookie-parser";
+import userRouter from "./routes/user.routes.js";
 
 const app = express();
 
-app.use(cors({
-    origin :process.env.ORIGIN_CORS,
-    Credential: true   
-}))
+// 🔹 ROUTES THAT USE MULTER FIRST
+app.use("/api/v1/user", userRouter);
 
-// 3 major express configurations of express 
+// 🔹 BODY PARSERS AFTER
+app.use(express.json({ limit: "16kb" }));
+app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 
-app.use(express.json({limit:"16kb"}))
-app.use(express.urlencoded({extended:true,limit:"16kb"}))
-app.use(express.static("Public"))
+// 🔹 STATIC
+app.use(express.static("public"));
 
-// cookieparser 
-
-app.use(cookieParser())
-
-
-// import routes 
-import userRouter from "./routes/user.routes.js";
+// 🔹 COOKIE PARSER
+app.use(cookieParser());
 
 
 
-// routes delecrtions
-
-app.use("/api/v1/users",userRouter)
-
-
-export{app};
+export { app };
