@@ -1,9 +1,11 @@
 import { AsyncHandler } from "../utils/asyncHandler.js";
 import { APIerrors } from "../utils/APIerrors.js";
 import { User } from "../models/user.model.js";
-import { fileUploaderOnCloudinary } from "../utils/cloudinary.js";
+import { deleteOnCloudinary, fileUploaderOnCloudinary } from "../utils/cloudinary.js";
 import { APIResponse } from "../utils/APIResponse.js";
 import jwt from "jsonwebtoken";
+import { application } from "express";
+import mongoose from "mongoose";
 
 
 const generateAccessTokenAndRefreshToken = async (userId) => {
@@ -221,9 +223,238 @@ try {
 }
 })
 
+const changePassword = AsyncHandler(async (req , res)=>{
+  const {oldPassword,newPassword} = req.body;
+
+  const user = await User.findById(req.user?._id)
+
+  const isPasswordCorrect = await User.isPasswordCorrect(oldPassword)
+
+  if (!isPasswordCorrect) {
+    throw new APIerrors(400,"password is incorrect")
+  }
+
+  user.password = newPassword;
+  user.save({validateBeforeSave:false})
+
+  return res.status(200)
+  .json(new APIResponse(200,{},"password change successfully"))
+})
+
+const getCurrentUser = AsyncHandler(async(req,res)=>{
+  return res.status(200)
+  .json(new APIResponse(200, req.user,"user successfully fetched"))
+})
+
+const updateUserDetails = AsyncHandler(async(req,res)=>{
+  const {email,fullname} = req.body;
+  if(!email && !fullname){
+    throw new APIerrors(400, "some flied is required ")
+  }
+
+  User.findByIdAndUpdate(
+    req.user?._id,
+    {
+     $set : {
+        email,
+        fullname
+     }
+    },
+    {new:true}
+  ).select("-password")
+
+  return res.status(200)
+  .json(new APIResponse(200,{user},"successfully Update the fields"))
+})
+
+const UpdateAvatar = AsyncHandler(async(req,res)=>{
+  const avatarLocalPath = req.file?.path;
+
+  const oldUrl = req.user?.avatar.url
+
+  if (!avatarLocalPath) {
+    throw new APIerrors(400,"Avatar file is missing")
+  }
+
+  const avatar = await fileUploaderOnCloudinary(avatarLocalPath)
+
+  if (!avatar) {
+    throw new APIerrors(400,"error happen while uploading")
+  }
+
+  const user = User.findByIdAndUpdate(req.user?._id,
+    {
+      $set:{
+        avatar : avatar?.url
+      }
+    },
+  {new:true}).select("-password")
+
+
+   const deletedUrl = await deleteOnCloudinary(oldUrl);
+
+  return res.status(200)
+  .json(new APIResponse(200,{user,deletedUrl},"successfully update Avatar and old url is deleted "))
+})
+
+const UpdateCoverImage = AsyncHandler(async(req,res)=>{
+  const coverImageLocalPath = req.file?.path;
+
+  const oldUrl = req.user?.coverImage.url
+
+  if (!coverImageLocalPath) {
+    throw new APIerrors(400,"CoverImage file is missing")
+  }
+
+  const coverImage = await fileUploaderOnCloudinary(coverImageLocalPath)
+
+  if (!coverImage) {
+    throw new APIerrors(400,"error happen while uploading")
+  }
+
+  const user = User.findByIdAndUpdate(req.user?._id,
+    {
+      $set:{
+        coverImage : coverImage?.url
+      }
+    },
+  {new:true}).select("-password")
+
+
+  const deletedUrl =  await deleteOnCloudinary(oldUrl)
+
+  return res.status(200)
+  .json(new APIResponse(200,{user,deletedUrl},"successfully update coverImage and old url is deleted"))
+})
+
+
+const getUserChannelProfile = AsyncHandler(async(req, res)=>{
+  const {username} = req.params;
+
+  if(!username?.trim()){
+    throw new APIerrors(400,"user does not exist")
+  }
+
+  const channel = await User.aggregate([
+    {
+      $match:{
+        username : username?.toLowerCase()
+      }
+    },
+    {
+      $lookup :{
+        from : "subscriptions",
+        localField:"_id",
+        foreignField: "channel",
+        as: "subscribers"
+      }
+    },
+    {
+      $lookup :{
+        from : "subscriptions",
+        localField:"_id",
+        foreignField: "subscriber",
+        as: "subscribedTo"
+      }
+    },
+    {
+      $addFields:{
+        subscriberCount :{
+            $size : "$subscribers"
+        },
+        channelSubscribedToCount:{
+          $size : "$subscribedTo"
+        },
+        isSubscribedToChannel:{
+          if : {$in : [req.user?._id, "$subscribers.subscriber"]},
+          then:true,
+          else:false
+        }
+      }
+    },
+    {
+      $project:{
+        username:1,
+        fullname:1,
+        email:1,
+        avatar:1,
+        coverImage:1,
+        isSubscribedToChannel:1,
+        channelSubscribedToCount:1,
+        subscriberCount:1
+      }
+    }
+  ])
+  
+  if(!channel?.length){
+    throw new APIerrors(400,"no channel found")
+  }
+
+  return res.status(200)
+  .json(new APIResponse(200,channel[0],"user channel fetched successfully")) 
+})
+
+const getWatchHistory = AsyncHandler(async(req, res)=>{
+ const user = await User.aggregate([
+    {
+      $match:{
+        _id: mongoose.Types.ObjectId(req.user?._id)
+      }
+    },
+    {
+      $lookup:{
+        from:"videos",
+        localField:"watchHistory",
+        foreignField:"_id",
+        as:"watchHistory",
+        pipeline:[
+          {
+            $lookup:{
+              from: "users",
+              localField:"owner",
+              foreignField:"_id",
+              as: "owner",
+              pipeline : [
+                {
+                  $project:{
+                    username:1,
+                    fullname:1,
+                    avatar:1,
+                  }
+                }
+            ]
+            }
+          },{
+            $addFields:{
+              owner :{
+                $first : "$owner"
+              }
+            }
+          }
+      ]
+      }, 
+    }
+  ])
+
+  if(!user.length){
+    throw new APIerrors( 400 , "user not found")
+  }
+
+  return res.status(200)
+  .json(new APIResponse(200,user[0].watchHistory,"watch history fetched successfully"))
+})
+
+
 export {
   registerUser,
   loginUser,
   logoutUser,
-  refreshAccessToken
+  refreshAccessToken,
+  changePassword,
+  getCurrentUser,
+  updateUserDetails,
+  UpdateAvatar,
+  UpdateCoverImage,
+  getUserChannelProfile,
+  getWatchHistory
 }

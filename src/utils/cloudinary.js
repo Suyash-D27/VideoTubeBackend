@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary'
 import fs from "fs"
+import { APIResponse } from './APIResponse';
 
 
 cloudinary.config({
@@ -24,4 +25,23 @@ const fileUploaderOnCloudinary = async (localFilepath) => {
     }
 }
 
-export { fileUploaderOnCloudinary }
+
+const deleteOnCloudinary = async (oldUrl) => {
+
+    const publicId = extractPublicId(oldUrl)
+
+    const result =  await cloudinary.uploader.destroy(publicId,{invalidate:true})
+
+    return result;
+    
+}
+
+
+const extractPublicId = (url) => {
+  // Regex captures everything after /upload/v[digits]/ and before the file extension
+  const regex = /\/v\d+\/([^.]+)/;
+  const match = url.match(regex);
+  return match ? match[1] : null;
+}
+
+export { fileUploaderOnCloudinary , deleteOnCloudinary}
