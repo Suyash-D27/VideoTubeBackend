@@ -141,4 +141,7 @@ dist
 # SvelteKit build / generate output
 .svelte-kit
 
+implementation_plan.md
+walkthrough.md
+task.md
 # End of https://www.toptal.com/developers/gitignore/api/node
